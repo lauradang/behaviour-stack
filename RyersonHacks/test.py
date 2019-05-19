@@ -1,261 +1,232 @@
+"""
+Face detection
+"""
+import cv2
+import os
+from time import sleep
+import numpy as np
+import argparse
+from wide_resnet import WideResNet
+from keras.utils.data_utils import get_file
 import pandas as pd
-import matplotlib
-from pylab import title, figure, xlabel, ylabel, xticks, bar, legend, axis, savefig
-from fpdf import FPDF
-import xlrd
-from pylab import *
+import datetime
 
-def generate_chart(xlsx_path, output_bar, output_pie, cate, titl1, title2):
+
+class FaceCV(object):
     
-    df = pd.read_excel(xlsx_path)
+    today = str(datetime.date.today())
 
-    columns = []
-    sums = []
+    count_0_9 = 0
+    count_10_19 = 0
+    count_20_29 = 0
+    count_30_39 = 0
+    count_40_49 = 0
+    count_50_59 = 0
+    count_60_69 = 0
+    count_70_79 = 0
+    count_80 = 0
 
-    is_date = True
-    for col in df.columns:
-        if (is_date): is_date = False
-        else:
-            sum = 0
-            columns.append(col)
-            for f in df[col]:
-                sum += int(f)
-            sums.append(sum)
+    count_F = 0
+    count_M = 0
 
-    title(titl1)
-    xlabel(cate)
-    #ylabel('Number of Occurrences')
+    df1 = pd.DataFrame(columns = ['0-9', '10-19', '20-29', '30-39', '40-49', '50-59', '60-69', '70-79', '80+'])
+    df2 = pd.DataFrame(columns = ['Female', 'Male'])
+  
+    """
+    Singleton class for face recongnition task
+    """
 
-    ncol = len(columns)
-    c = []
-    for i in range(ncol):
-        c.append(i * 2 + 2)
+    def __new__(cls, weight_file=None, depth=16, width=8, face_size=64):
+        if not hasattr(cls, 'instance'):
+            cls.instance = super(FaceCV, cls).__new__(cls)
+        return cls.instance
 
-    xticks(c, columns)
-    bar(c, sums, width=0.75, color="#eb879c", label="Frequency", align='center')
+    def __init__(self, depth=16, width=8, face_size=64):
+        self.face_size = face_size
+        self.model = WideResNet(face_size, depth=depth, k=width)()
+        model_dir = os.path.join(os.getcwd(), "pretrained_models").replace("//", "\\")
+        fpath = get_file('weights.18-4.06.hdf5',
+                         '/Users/lauradang/RyersonHacks/Gender-Recognition-and-Age-Estimator/pretrained_models/weights.18-4.06.hdf5',
+                         cache_subdir=model_dir)
+        self.model.load_weights(fpath)
 
-    legend()
-    savefig(output_bar)
-    plt.clf()
-    
-    ### 
-    
-    plt.text(1.5, 1.5,'Report for Loblaws- Advertisement: ',
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) #This creates text
-    
-    title(title2)
-    xlabel(cate)
-    ylabel('Number of people')
-    
-    labels = columns
-    sizes = sums
-    
-    colors = ['yellowgreen', 'gold', 'lightskyblue', 'lightcoral', 'mintcream', 'tan', 'darkgray']
-    patches, texts = plt.pie(sizes, colors=colors, shadow=True, startangle=90)
-    plt.legend(patches, labels, loc="best")
-    plt.axis('equal')
-    plt.tight_layout()
-    savefig(output_pie)
-    plt.clf()    
+    @classmethod
+    def draw_label(cls, image, point, label, font=cv2.FONT_HERSHEY_SIMPLEX,
+                   font_scale=1, thickness=2):
+        size = cv2.getTextSize(label, font, font_scale, thickness)[0]
+        x, y = point
+        cv2.rectangle(image, (x, y - size[1]), (x + size[0], y), (255, 0, 0), cv2.FILLED)
+        cv2.putText(image, label, point, font, font_scale, (255, 255, 255), thickness)
 
-path = r"/Users/lauradang/RyersonHacks/data/gender.xlsx"
-output = "hatelife.png"
-outputp = "hatelifep.png"
-generate_chart(path, output, outputp, 'Gender', 'How often each gender viewed', 'Percentage of gender')
-path2 = r"/Users/lauradang/RyersonHacks/data/age.xlsx"
-output2 = "stillhatinglife.png"
-output2p = "stillhatinglifep.png"
-generate_chart(path2, output2, output2p, 'Age', 'How often each age group viewed', 'Percentage of age')
-path1 = r"/Users/lauradang/RyersonHacks/data/emotions.xlsx"
-output3 = "hatinglife.png"
-output3p = "hatinglifep.png"
-generate_chart(path1, output3, output3p, 'Emotions', 'How often each emotion is experienced', 'Percentage of emotion')
-output_pie = "pie.png"
+    def crop_face(self, imgarray, section, margin=40, size=64):
+        """
+        :param imgarray: full image
+        :param section: face detected area (x, y, w, h)
+        :param margin: add some margin to the face detected area to include a full head
+        :param size: the result image resolution with be (size x size)
+        :return: resized image in numpy array with shape (size x size x 3)
+        """
+        img_h, img_w, _ = imgarray.shape
+        if section is None:
+            section = [0, 0, img_w, img_h]
+        (x, y, w, h) = section
+        margin = int(min(w,h) * margin / 100)
+        x_a = x - margin
+        y_a = y - margin
+        x_b = x + w + margin
+        y_b = y + h + margin
+        if x_a < 0:
+            x_b = min(x_b - x_a, img_w-1)
+            x_a = 0
+        if y_a < 0:
+            y_b = min(y_b - y_a, img_h-1)
+            y_a = 0
+        if x_b > img_w:
+            x_a = max(x_a - (x_b - img_w), 0)
+            x_b = img_w
+        if y_b > img_h:
+            y_a = max(y_a - (y_b - img_h), 0)
+            y_b = img_h
+        cropped = imgarray[y_a: y_b, x_a: x_b]
+        resized_img = cv2.resize(cropped, (size, size), interpolation=cv2.INTER_AREA)
+        resized_img = np.array(resized_img)
+        return resized_img, (x_a, y_a, x_b - x_a, y_b - y_a)
 
-# Accessing the data file 
-
-
-df = pd.read_excel(path1)
-dgen = pd.read_excel(path)
-dage = pd.read_excel(path2)    
-
-
-
-def get_max_emotion(name, date):
-    name_column = df[name]
-    date_column = df[df.columns[0]]
-    new_max = 0
-    date = 0
-    count = 0
-
-    for count, index in enumerate(name_column):
-        if index > new_max: 
-            new_max = index
-            date = date_column.iloc[count]
-
-    return date
-
-
-def get_max_gender(gender, date):
-    gender_column = dgen[gender]
-    date_column = df[df.columns[0]]
-    new_max = 0
-    count = 0
-    date = 0
-
-    for count, index in enumerate(gender_column):
-        if index > new_max:
-            new_max = index
-            date = date_column.iloc[count]
-
-    return date
-
-
-
-def get_max_age(date):
-    #age_column = dage[age]
-    date_column = df[df.columns[0]]
-    date_max = 0
-    position_i = 0
-    position_j = 0
-    counter = 0
-    
-    count_row = df.shape[0]  # gives number of row count
-    count_col = df.shape[1] 
-    
-    returnlst = []
-    
-    for i in range(0, count_row):
+    def detect_face(self):
         
-        for j in range (1, count_col):
-            
-            if dage.iloc[i, j] > date_max:
-                date_max = int(dage.iloc[i, j])
-                position_i = i
-                position_j = j
+        face_cascade = cv2.CascadeClassifier('/Users/lauradang/RyersonHacks/Gender-Recognition-and-Age-Estimator/pretrained_models/haarcascade_frontalface_alt.xml')
+
+        # 0 means the default video capture device in OS
+        video_capture = cv2.VideoCapture(0)
+        # infinite loop, break by key ESC
+        while True:
+
+            try:
+                if not video_capture.isOpened():
+                    sleep(5)
+                # Capture frame-by-frame
+                ret, frame = video_capture.read()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(
+                    gray,
+                    scaleFactor=1.2,
+                    minNeighbors=10,
+                    minSize=(self.face_size, self.face_size)
+                )
+                if faces is not ():
+                    
+                    # placeholder for cropped faces
+                    face_imgs = np.empty((len(faces), self.face_size, self.face_size, 3))
+                    for i, face in enumerate(faces):
+                        face_img, cropped = self.crop_face(frame, face, margin=40, size=self.face_size)
+                        (x, y, w, h) = cropped
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 200, 0), 2)
+                        face_imgs[i,:,:,:] = face_img
                 
-            if j == count_col - 1:
-                strreturn = str("The date at: " + str(dage.iloc[i, 0]) + " The greatest number is: " + str(date_max) +
-                     " of the age group " + dage.columns[position_j])
-                returnlst.append(strreturn)
-                date_max = 0
-                position_i = 0
-                position_j = 0
-                
-    return returnlst
+                    if len(face_imgs) > 0:
+                        # predict ages and genders of the detected faces
+                        results = self.model.predict(face_imgs)
+                        predicted_genders = results[0]
+                        ages = np.arange(0, 101).reshape(101, 1)
+                        predicted_ages = results[1].dot(ages).flatten()
+                    
+                    # draw results
+                    for i, face in enumerate(faces):
+                        label = "{}, {}".format(int(predicted_ages[i]),
+                                                "F" if predicted_genders[i][0] > 0.5 else "M")
+                        
+                        self.draw_label(frame, (face[0], face[1]), label)
 
+                        data = label.split(", ")
 
+                        if data[1] == 'F':
+                            self.count_F += 1
+                            if int(data[0]) >= 0 and int(data[0]) <= 9:
+                                self.count_0_9 += 1
+                            elif int(data[0]) >= 10 and int(data[0]) <= 19:
+                                self.count_10_19 += 1
+                            elif int(data[0]) >= 20 and int(data[0]) <= 29:
+                                self.count_20_29 += 1
+                            elif int(data[0]) >= 30 and int(data[0]) <= 39:
+                                self.count_30_39 += 1
+                            elif int(data[0]) >= 40 and int(data[0]) <= 49:
+                                self.count_40_49 += 1
+                            elif int(data[0]) >= 50 and int(data[0]) <= 59:
+                                self.count_50_59 += 1
+                            elif int(data[0]) >= 60 and int(data[0]) <= 69:
+                                self.count_60_69 += 1
+                            elif int(data[0]) >= 70 and int(data[0]) <= 79:
+                                self.count_70_79 += 1
+                            elif int(data[0]) >= 80:
+                                self.count_80 += 1
+                        elif data[1] == 'M':
+                            self.count_M += 1
+                            if int(data[0]) >= 0 and int(data[0]) <= 9:
+                                self.count_0_9 += 1
+                            elif int(data[0]) >= 10 and int(data[0]) <= 19:
+                                self.count_10_19 += 1
+                            elif int(data[0]) >= 20 and int(data[0]) <= 29:
+                                self.count_20_29 += 1
+                            elif int(data[0]) >= 30 and int(data[0]) <= 39:
+                                self.count_30_39 += 1
+                            elif int(data[0]) >= 40 and int(data[0]) <= 49:
+                                self.count_40_49 += 1
+                            elif int(data[0]) >= 50 and int(data[0]) <= 59:
+                                self.count_50_59 += 1
+                            elif int(data[0]) >= 60 and int(data[0]) <= 69:
+                                self.count_60_69 += 1
+                            elif int(data[0]) >= 70 and int(data[0]) <= 79:
+                                self.count_70_79 += 1
+                            elif int(data[0]) >= 80:
+                                self.count_80 += 1
 
-def generate_text(output_txt):
-    
-    #get_max('Sad', 'Date')
-    t1 = ("saddest day: " + str(get_max_emotion('Sad', 'Date')))
-    t2 = ("happiest day: " + str(get_max_emotion('Happy', 'Date')))
-    t3 = ("disgusted day: " + str(get_max_emotion('Disgust', 'Date')))
-    t4 = ("scariest day: " + str(get_max_emotion('Fear', 'Date')))
-    t5 = ("neutralest day: " + str(get_max_emotion('Neutral', 'Date')))
-    t6 = ("angriest day: " + str(get_max_emotion('Anger', 'Date')))
-    t7 = ("surprisingest day: " + str(get_max_emotion('Surprise', 'Date')))
-    
-    t8 = ("most females day: " + str(get_max_gender('Female', 'Date')))
-    t9 = ("most males day: " + str(get_max_gender('Male', 'Date')))    
-    
+                    cv2.imshow('Keras Faces', frame)
 
-    
-    plt.text(1.5, 1.5, t1,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t2,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t3,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t4,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t5,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t6,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t7,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t8,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5)) 
-    plt.text(1.5, 1.5, t9,
-         horizontalalignment='center',
-         verticalalignment='center', bbox=dict(facecolor='pink', alpha=0.5))     
-    
-    savefig(output_txt)
-    plt.clf()     
+                if cv2.waitKey(1) & 0xFF == ord('q'): #press q to quit
+                    break
+            except:
+                break
 
+        self.df1.loc[self.today, '0-9'] = self.count_0_9
+        self.df1.loc[self.today, '10-19'] = self.count_10_19
+        self.df1.loc[self.today, '20-29'] = self.count_20_29
+        self.df1.loc[self.today, '30-39'] = self.count_30_39
+        self.df1.loc[self.today, '40-49'] = self.count_40_49
+        self.df1.loc[self.today, '50-59'] = self.count_50_59
+        self.df1.loc[self.today, '60-69'] = self.count_60_69
+        self.df1.loc[self.today, '70-79'] = self.count_70_79
+        self.df1.loc[self.today, '80+'] = self.count_80
 
-outputtxt = "txtihate.png"
-generate_text(outputtxt)
+        self.df2.loc[self.today, 'Female'] = self.count_F
+        self.df2.loc[self.today, 'Male'] = self.count_M
 
-t1 = ("Saddest day is: " + str(get_max_emotion('Sad', 'Date')))
-t2 = ("Happiest day is: " + str(get_max_emotion('Happy', 'Date')))
-t3 = ("The most disgusting day is: " + str(get_max_emotion('Disgust', 'Date')))
-t4 = ("Scariest day is: " + str(get_max_emotion('Fear', 'Date')))
-t5 = ("Most neutral day is: " + str(get_max_emotion('Neutral', 'Date')))
-t6 = ("Angriest day is: " + str(get_max_emotion('Anger', 'Date')))
-t7 = ("Most surprising day is: " + str(get_max_emotion('Surprise', 'Date')))
+        self.df1.to_excel('/Users/lauradang/RyersonHacks/data/age.xlsx')
+        self.df2.to_excel('/Users/lauradang/RyersonHacks/data/gender.xlsx')
 
+        # When everything is done, release the capture
+        video_capture.release()
+        cv2.destroyAllWindows()
 
+def get_args():
+    parser = argparse.ArgumentParser(description="This script detects faces from web cam input, "
+                                                 "and estimates age and gender for the detected faces.",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-t8 = ("The date that had the most females was: " + str(get_max_gender('Female', 'Date')))
-t9 = ("The date that had the most males was: " + str(get_max_gender('Male', 'Date')))
+    parser.add_argument("--depth", type=int, default=16,
+                        help="depth of network")
+    parser.add_argument("--width", type=int, default=8,
+                        help="width of network")
+    args = parser.parse_args()
+    return args
 
-t10_list =  get_max_age('Date')
+def main():
+    args = get_args()
+    depth = args.depth
+    width = args.width
 
+    face = FaceCV(depth=depth, width=width)
 
+    face.detect_face()
 
-    
-if __name__ == '__main__':
-    
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font('Arial', size=20)
-
-    pdf.image(output, x = 120, y = 60, w = 70)
-    pdf.image(outputp, x = 30, y = 60, w = 70)
-    pdf.image(output3, x = 120, y = 140, w = 70)
-    pdf.image(output3p, x = 30, y = 140, w = 70)
-    pdf.image(output2, x = 120, y = 240, w = 70)
-    pdf.image(output2p, x = 30, y = 240, w = 70)
-    #pdf.image(outputtxt, x = 30, y = 200, w = 100)
-    
-    
-    pdf.multi_cell(0, 5, "REPORT ON EMOTIONS AND DEMOGRAPHICS")
-    pdf.set_font("Arial", size=8)
-    pdf.set_y(20)
-    pdf.multi_cell(0, 5, t1, 1)
-    pdf.multi_cell(0, 5, t2, 1)
-    pdf.multi_cell(0, 5, t3, 1)
-    pdf.multi_cell(0, 5, t4, 1)
-    pdf.multi_cell(0, 5, t5, 1)
-    pdf.multi_cell(0, 5, t6, 1)
-    pdf.multi_cell(0, 5, t7, 1)
-    pdf.set_y(120)
-    pdf.multi_cell(0, 5, t8, 1)
-    pdf.multi_cell(0, 5, t9, 1)
-    pdf.set_y(200)
-
-    for i in t10_list:
-        pdf.multi_cell(0, 5, i, 1)  
-        
-    
-    pdf.output("add_image.pdf")
-    
-    
-    #pdf.ln(85)  # move 85 down
-     
-    
-    #add_image(output_name_emotion, 20)
-    #add_image(output_name_age, 120)
-    #add_image(output_name_gender, 220)
+if __name__ == "__main__":
+    main()

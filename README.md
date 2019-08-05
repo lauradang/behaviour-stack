@@ -4,9 +4,9 @@ A program that tracks emotion, age, and gender to gather insight on which advert
 
 ## Built with
 
-* Python - Main language of program and used to automate statistics report to email when program finishes running
+* Python - Main language of program and used to automate statistics report to email
 * [Pandas](https://pandas.pydata.org/) - Used to organize data gathered from camera and create statistics report
-* [Pretrained models and open-source algorithm](https://github.com/krishnaik06/Gender-Recognition-and-Age-Estimator)
+* [Pretrained models and open-source algorithm](https://github.com/krishnaik06/Gender-Recognition-and-Age-Estimator) - Used to detect emotion, age, and gender from person in front of camera
 
 ## Authors
 

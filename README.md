@@ -8,3 +8,6 @@ A program that tracks emotion, age, and gender to gather insight on which advert
 * [Pandas](https://pandas.pydata.org/) - Used to organize data gathered from camera and create statistics report
 * [Pretrained models and open-source algorithm](https://github.com/krishnaik06/Gender-Recognition-and-Age-Estimator)
 
+## Authors
+
+Laura Dang, Thang Nguyen, Rachel Li, Lizzie Kim

@@ -1,6 +1,6 @@
 # BehaviourStack
 
-A program that tracks emotion, age, and gender to gather insight on which advertisement techniques are more effective to certain target audiences, and automatically sends an email with a formatted statistics report based on the results. This program was built at the University of Ryerson for RUHacks 2019. Due to time contraints, open-source code and pretrained models were used to gather demographics. 
+A program that tracks emotion, age, and gender to gather insight on which advertisement techniques are more effective to certain target audiences, and automatically sends an email with a formatted statistics report based on the results. This program was built at the University of Ryerson for RUHacks 2019. Due to time constraints, open-source code and pretrained models were used to gather demographics. 
 
 ## Built with
 
